@@ -1,57 +1,60 @@
-version: "3.7"
+version: '3.8'
 services:
-  app:
-    build:
-      args:
-        user: demo
-        uid: 1000
-      context: ./
-      dockerfile: Dockerfile
-    image: demo
-    container_name: demo-app
-    restart: unless-stopped
-    working_dir: /var/www/
-    volumes:
-      - ./:/var/www
-    networks:
-      - demo
-
-  adminer:
-    image: adminer
-    container_name: demo-adminer
-    restart: unless-stopped
-    ports:
-      - 8080:8080
-    networks:
-      - demo 
   db:
     image: mysql:5.7
-    container_name: demo-db
+    container_name: app_db
     restart: unless-stopped
     environment:
-      MYSQL_DATABASE: ${DB_DATABASE}
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
-      MYSQL_PASSWORD: ${DB_PASSWORD}
-      MYSQL_USER: ${DB_USERNAME}
-      SERVICE_TAGS: dev
-      SERVICE_NAME: mysql
-    # volumes:
-      # - ./docker-compose/mysql:/docker-entrypoint-initdb.d
+      MYSQL_ALLOW_EMPTY_PASSWORD: yes
+    volumes:
+      - ./data:/var/lib/mysql
     networks:
-      - demo
+      - dev
 
-  nginx:
-    image: nginx:alpine
-    container_name: demo-nginx
+  phpmyadmin:
+    image: phpmyadmin
+    container_name: app_phpmyadmin
     restart: unless-stopped
+    depends_on:
+        - db
+    ports:
+      - 8080:80
+    environment:
+        PMA_HOST: db
+    networks:
+      - dev
+
+  maildev:
+    image: maildev/maildev
+    container_name: app_maildev
+    restart: unless-stopped
+    command: bin/maildev --web 80 --smtp 25 --hide-extensions STARTTLS
+    ports:
+      - 8081:80
+    networks:
+      - dev
+
+  www:
+    build:
+      args:
+        user: app
+        uid: 1000
+      context: ./php
+      dockerfile: Dockerfile
+    image: app
+    container_name: app_www
     ports:
       - "8000:80"
     volumes:
-      - ./:/var/www
-      - ./docker-compose/nginx:/etc/nginx/conf.d
+        - ./php/vhosts:/etc/apache2/sites-enabled
+        - ./:/var/www
+    restart: unless-stopped
     networks:
-      - demo
+        - dev
 
 networks:
-  demo:
+  dev:
     driver: bridge
+volumes:
+  data:
+
